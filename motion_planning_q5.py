@@ -5,12 +5,11 @@ from enum import Enum, auto
 
 import numpy as np
 
-from planning_utils import dfs, a_star, heuristic, create_grid, heuristicManhattanForQ4, ucs, heuristicMinkowskiForQ4, iterative_astar, threePointsAStar
+from planning_utils_q5 import create_grid_and_edges, create_graph_with_edges, bfs
 from udacidrone import Drone
 from udacidrone.connection import MavlinkConnection
 from udacidrone.messaging import MsgID
 from udacidrone.frame_utils import global_to_local
-
 
 
 class States(Enum):
@@ -33,10 +32,8 @@ class MotionPlanning(Drone):
         self.in_mission = True
         self.check_state = {}
 
-        # initial state
         self.flight_state = States.MANUAL
 
-        # register all your callbacks here
         self.register_callback(MsgID.LOCAL_POSITION, self.local_position_callback)
         self.register_callback(MsgID.LOCAL_VELOCITY, self.velocity_callback)
         self.register_callback(MsgID.STATE, self.state_callback)
@@ -116,37 +113,35 @@ class MotionPlanning(Drone):
         self.flight_state = States.PLANNING
         print("Searching for a path ...")
         TARGET_ALTITUDE = 5
-        SAFETY_DISTANCE = 5
+        SAFETY_DISTANCE = 3
 
         self.target_position[2] = TARGET_ALTITUDE
         
         print('global home {0}, position {1}, local position {2}'.format(self.global_home, self.global_position,
                                                                          self.local_position))
-
         data = np.loadtxt('colliders.csv', delimiter=',', dtype='Float64', skiprows=2)
         
-        grid, north_offset, east_offset = create_grid(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
+        #run the given function
+        grid, edges, north_offset, east_offset = create_grid_and_edges(data, TARGET_ALTITUDE, SAFETY_DISTANCE)
 
         print("North offset = {0}, east offset = {1}".format(north_offset, east_offset))
 
-        grid_start = (-north_offset, -east_offset)
-        
-        # The following additions / subtractions can be modified for different starting and ending points
-        grid_goal = (-north_offset + 5, -east_offset + 5)
+        # The following two values can be modified to any points of the edges in the graph
+        grid_start = (340.76114, 620.7685083333317)
+        grid_goal = (80.7611, 650.7685)
 
         print('Local Start and Goal: ', grid_start, grid_goal)
+        
+        #create the graph
+        graph = create_graph_with_edges(edges)
+        
+        #BFS Algorithm
+        path, _ = bfs(graph,grid_start, grid_goal)
+        print('\n The Returned Path:\n {}'.format(path))
 
-        #Uncomment any one of the functions as required for testing - change the heuristics function (by default set as Euclidian distance) as heuristicManhattanForQ4, heuristicMinkowskiForQ4 (p=3)
-
-        # path, _ = a_star(grid, heuristic, grid_start, grid_goal)
-        path, _ = dfs(grid, heuristic, grid_start, grid_goal)
-        # path, _ = iterative_astar(grid, heuristic, grid_start, grid_goal)
-        # path, _ = ucs(grid, heuristic, grid_start, grid_goal)
-        # path, _ = threePointsAStar(grid, grid_start, grid_goal)
-
-        # Convert path to waypoints
-        waypoints = [[p[0] + north_offset, p[1] + east_offset, TARGET_ALTITUDE, 0] for p in path]
+        waypoints = [[point[0] + north_offset, point[1] + east_offset, TARGET_ALTITUDE, 0] for point in path]
         self.waypoints = waypoints
+        print('\n The Waypoints:\n {}'.format(self.waypoints))
         self.send_waypoints()
 
     def start(self):
@@ -168,5 +163,3 @@ if __name__ == "__main__":
     time.sleep(1)
 
     drone.start()
-
-
